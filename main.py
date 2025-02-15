@@ -16,9 +16,9 @@ ADMIN_ID = 6972264549  # Admin ID for restricted commands
 def configure_braintree():
     braintree.Configuration.configure(
         braintree.Environment.Sandbox,  # Use Sandbox for testing or .Production for live
-        merchant_id=BRAINTREE_KEY['merchant_id'],
-        public_key=BRAINTREE_KEY['public_key'],
-        private_key=BRAINTREE_KEY['private_key']
+        merchant_id=BRAINTREE_KEY['xtw6fsgw6387brsz'],
+        public_key=BRAINTREE_KEY['g3q4dw5ykhjtgcqy'],
+        private_key=BRAINTREE_KEY['0276dac6121e9cf5f914b018493902ca']
     )
 
 # Function to get a valid Braintree client token
