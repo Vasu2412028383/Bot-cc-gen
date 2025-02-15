@@ -6,10 +6,16 @@ import aiohttp
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from aiohttp import web
+import stripe  # ✅ Stripe API for Checking Cards
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")  # ✅ Telegram Bot Token
-
 BIN_LOOKUP_URL = "https://bins.antipublic.cc/bins/"  # ✅ Free BIN Lookup URL
+
+# ✅ Admins & Premium Users Storage
+ADMINS = {"6972264549"}  # 🔹 Replace with your Telegram ID
+PREMIUM_USERS = {}
+USER_CHECK_LIMIT = {}
+STRIPE_KEYS = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.message.from_user.first_name  
@@ -17,7 +23,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_message)
 
 async def get_bin_info(bin_number):
-    """✅ Free BIN Lookup से जानकारी प्राप्त करें (No API Key Required)"""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{BIN_LOOKUP_URL}{bin_number}") as response:
@@ -49,9 +54,8 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         exp_date = args[1] if len(args) > 1 else f"{random.randint(1,12):02d}/{random.randint(25,30)}"
         cvv = args[2] if len(args) > 2 else f"{random.randint(100,999)}"
 
-        bin_info = await get_bin_info(bin_number[:6])  # ✅ BIN की जानकारी प्राप्त करें
+        bin_info = await get_bin_info(bin_number[:6])
 
-        # 10 डमी कार्ड जनरेट करें
         cards = [
             f"{bin_number}{''.join(str(random.randint(0,9)) for _ in range(16 - len(bin_number)))} | {exp_date} | {cvv}"
             for _ in range(10)
@@ -63,11 +67,10 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🌍 **𝗖𝗼𝘂𝗻𝘁𝗿𝘆:** {bin_info['country']} {bin_info['flag']}\n\n"
         ) if bin_info else "⚠️ **BIN Info Not Available**\n\n"
 
-        # फॉर्मेटेड मैसेज
         message = (
             "**Generated Cards 🚀**\n\n"
             + bin_details
-            + "\n".join([f"`{card}`" for card in cards]) +  # ✅ Mono Font में Card
+            + "\n".join([f"`{card}`" for card in cards]) + 
             "\n\n👉 @DarkDorking (Join Channel)"
         )
         
@@ -76,16 +79,65 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"⚠️ Error: {str(e)}")
 
+async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.message.from_user.id)
+    
+    if user_id not in PREMIUM_USERS and USER_CHECK_LIMIT.get(user_id, 0) >= 10:
+        await update.message.reply_text("❌ Daily limit reached! Buy Premium to check more cards.")
+        return
+    
+    if user_id in STRIPE_KEYS:
+        stripe.api_key = STRIPE_KEYS[user_id]
+    else:
+        await update.message.reply_text("❌ No Stripe key found! Admin needs to add it.")
+        return
+    
+    args = context.args
+    if len(args) < 1:
+        await update.message.reply_text("❌ EXAMPLE: `/chk 4242424242424242|12/25|123`")
+        return
+    
+    card_details = args[0].split('|')
+    
+    try:
+        token = stripe.Token.create(
+            card={
+                "number": card_details[0],
+                "exp_month": int(card_details[1].split('/')[0]),
+                "exp_year": int(card_details[1].split('/')[1]),
+                "cvc": card_details[2]
+            }
+        )
+        message = f"✅ LIVE: `{args[0]}`"
+        USER_CHECK_LIMIT[user_id] = USER_CHECK_LIMIT.get(user_id, 0) + 1
+    except stripe.error.CardError:
+        message = f"❌ DEAD: `{args[0]}`"
+    
+    await update.message.reply_text(message, parse_mode="Markdown")
+
+async def add_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.message.from_user.id)
+    if user_id not in ADMINS:
+        return
+    
+    args = context.args
+    if len(args) < 2:
+        await update.message.reply_text("❌ EXAMPLE: `/addpremium user_id days`")
+        return
+    
+    PREMIUM_USERS[args[0]] = int(args[1])
+    await update.message.reply_text("✅ Premium added!")
+
 async def health_check(request):
     return web.Response(text="OK")
 
 async def run_services():
-    # Telegram बॉट सेटअप
     application = ApplicationBuilder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("gen", generate))
-
-    # HTTP सर्वर (Port 8080)
+    application.add_handler(CommandHandler("chk", check_card))
+    application.add_handler(CommandHandler("addpremium", add_premium))
+    
     app = web.Application()
     app.router.add_get("/", health_check)
     runner = web.AppRunner(app)
@@ -93,12 +145,10 @@ async def run_services():
     site = web.TCPSite(runner, port=8080)
     await site.start()
 
-    # दोनों सर्वर चलाएं
     await application.initialize()
     await application.start()
     await application.updater.start_polling()
 
-    # अनंत लूप
     while True:
         await asyncio.sleep(3600)
 
