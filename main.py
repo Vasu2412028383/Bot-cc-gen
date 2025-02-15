@@ -57,15 +57,24 @@ async def add_sk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     STRIPE_KEY = context.args[0]
     await update.message.reply_text("✅ Stripe API Key Set Successfully!")
 
+import stripe
+import re
+from telegram import Update
+from telegram.ext import ContextTypes
+
+STRIPE_KEY = None  # Ensure this is set using /addsk
+
 async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global STRIPE_KEY
     if STRIPE_KEY is None:
         await update.message.reply_text("❌ No Stripe API key found! Admin needs to add it using /addsk")
         return
 
+    # Validate user input
     args = context.args
-    if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}\|\d{2}\|\d{3}$", args[0]):
-        await update.message.reply_text("❌ EXAMPLE: /chk 4242424242424242|12|25|123")
+    card_pattern = r"^\d{16}\|\d{2}\|\d{2}\|\d{3}$"
+    if len(args) < 1 or not re.match(card_pattern, args[0]):
+        await update.message.reply_text("❌ Invalid format!\n**Example:** `/chk 4242424242424242|12|25|123`")
         return
 
     card_details = args[0].split('|')
@@ -78,6 +87,7 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bin_info = {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
 
     try:
+        # Stripe Token Creation
         token = stripe.Token.create(
             card={
                 "number": card_details[0],
@@ -89,17 +99,27 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status = "✅ Approved"
         response_message = "Transaction Successful."
         gateway = "Stripe"
+
     except stripe.error.CardError as e:
         status = "❌ Declined"
-        response_message = e.user_message  # Capture the actual decline reason
+        response_message = e.user_message or "Card declined."
         if "Sending credit card numbers directly" in response_message:
             response_message = "Your card was declined."
         gateway = "Stripe Auth"
 
+    except stripe.error.APIConnectionError:
+        await update.message.reply_text("⚠️ Stripe API connection failed. Please try again later.")
+        return
+
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Unexpected error: {str(e)}")
+        return
+
+    # Final Message Formatting
     message = (
-        f"🔥 Stripe Auth (/chk) | Free\n"
+        f"🔥 **Stripe Auth** (`/chk`) | Free\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"💳 **Card:** {args[0]}\n"
+        f"💳 **Card:** `{args[0]}`\n"
         f"📌 **Status:** {status}\n"
         f"📢 **Response:** {response_message}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
@@ -112,6 +132,7 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(message, parse_mode="Markdown")
+
 
 
 
