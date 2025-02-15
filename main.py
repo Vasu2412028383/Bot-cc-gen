@@ -75,7 +75,14 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bin_info = await get_bin_info(bin_number)
     
     if not bin_info:
-        bin_info = {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
+        bin_info = {
+            "vendor": "Unknown",
+            "type": "Unknown",
+            "country_name": "Unknown",
+            "bank": "Unknown"
+        }
+
+    user_name = update.message.from_user.username or update.message.from_user.first_name
 
     try:
         token = stripe.Token.create(
@@ -86,21 +93,29 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "cvc": card_details[3]
             }
         )
-        status = "✅ LIVE"
-        gateway = "Stripe"
-    except stripe.error.CardError:
-        status = "❌ DEAD"
-        gateway = "None"
+        status = "✅ Approved"
+        response_msg = "Transaction Approved."
+    except stripe.error.CardError as e:
+        status = "❌ Declined"
+        response_msg = e.user_message if hasattr(e, "user_message") else "Your card was declined."
 
     message = (
-        f"{status}: `{args[0]}`\n\n"
-        f"💳 **Card Type:** {bin_info.get('vendor', 'Unknown')} ({bin_info.get('type', 'Unknown')})\n"
-        f"🏦 **Bank:** {bin_info.get('bank', 'Unknown')}\n"
-        f"🌍 **Country:** {bin_info.get('country_name', 'Unknown')}\n"
-        f"🔗 **Gateway:** {gateway}\n"
+        f"🔥 **Stripe Auth (/chk) | Free**\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"💳 **Card:** `{args[0]}`\n"
+        f"📌 **Status:** {status}\n"
+        f"📢 **Response:** {response_msg}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"💲 **Gateway:** Stripe Auth\n"
+        f"🏦 **Issuer:** {bin_info.get('bank', 'Unknown')}\n"
+        f"🌍 **Country:** {bin_info.get('country_name', 'Unknown')} \n"
+        f"🔖 **Type:** {bin_info.get('vendor', 'Unknown')} - {bin_info.get('type', 'Unknown')}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"👤 **Checked by:** @{user_name}"
     )
     
     await update.message.reply_text(message, parse_mode="Markdown")
+
 
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -110,7 +125,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         bin_number = args[0]
-        if not re.match(r"^\d{6,16}$", bin_number):
+        if not re.match(r"^\d{4,16}$", bin_number):
             await update.message.reply_text("❌ Wrong BIN Number!")
             return
 
