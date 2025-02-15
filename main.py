@@ -10,18 +10,7 @@ from aiohttp import web
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 STRIPE_KEY = None  # Global variable for storing Stripe API key
-ADMIN_ID = 6972264549  # Admin ID
-
-def luhn_check(card_number):
-    digits = [int(d) for d in str(card_number)][::-1]
-    checksum = sum(digits[0::2]) + sum(sum(divmod(d * 2, 10)) for d in digits[1::2])
-    return checksum % 10 == 0
-
-def generate_card(bin_number):
-    while True:
-        card_number = bin_number + "".join(str(random.randint(0, 9)) for _ in range(16 - len(bin_number)))
-        if luhn_check(card_number):
-            return card_number
+ADMIN_ID = 6972264549  # Admin ID for restricted commands
 
 async def get_bin_info(bin_number):
     url = f"https://bins.antipublic.cc/bins/{bin_number}"
@@ -34,6 +23,24 @@ async def get_bin_info(bin_number):
         print(f"BIN API Error: {e}")
     return None
 
+def luhn_check(card_number):
+    digits = [int(d) for d in str(card_number)]
+    checksum = 0
+    reverse_digits = digits[::-1]
+    for i, digit in enumerate(reverse_digits):
+        if i % 2 == 1:
+            digit *= 2
+            if digit > 9:
+                digit -= 9
+        checksum += digit
+    return checksum % 10 == 0
+
+def generate_luhn_card(bin_number):
+    while True:
+        card_number = bin_number + ''.join(str(random.randint(0, 9)) for _ in range(16 - len(bin_number)))
+        if luhn_check(card_number):
+            return card_number
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.message.from_user.first_name
     welcome_message = f"Welcome, {user_name}! 🚀\n\nThis is the Free CC Generator Bot.\n\nEnjoy!"
@@ -44,7 +51,6 @@ async def add_sk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id != ADMIN_ID:
         await update.message.reply_text("❌ You are not authorized to set the Stripe API key!")
         return
-    
     if not context.args:
         await update.message.reply_text("❌ EXAMPLE: /addsk sk_live_xxx")
         return
@@ -58,8 +64,8 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     args = context.args
-    if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}/\d{2}\|\d{3}$", args[0]):
-        await update.message.reply_text("❌ EXAMPLE: /chk 4242424242424242|12/25|123")
+    if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}\|\d{2}\|\d{3}$", args[0]):
+        await update.message.reply_text("❌ EXAMPLE: /chk 4242424242424242|12|25|123")
         return
     
     card_details = args[0].split('|')
@@ -69,9 +75,9 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         token = stripe.Token.create(
             card={
                 "number": card_details[0],
-                "exp_month": int(card_details[1].split('/')[0]),
-                "exp_year": int(card_details[1].split('/')[1]),
-                "cvc": card_details[2]
+                "exp_month": int(card_details[1]),
+                "exp_year": int(card_details[2]),
+                "cvc": card_details[3]
             }
         )
         message = f"✅ LIVE: {args[0]}"
@@ -84,40 +90,36 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         args = context.args
         if not args:
-            await update.message.reply_text("❌ EXAMPLE: /gen 424242 [MM/YY] [CVV]")
+            await update.message.reply_text("❌ EXAMPLE: /gen 424242")
             return
 
         bin_number = args[0]
         if not re.match(r"^\d{6,16}$", bin_number):
-            await update.message.reply_text("❌ Wrong BIN Number! Format: First 6-16 digits of card number.")
+            await update.message.reply_text("❌ Wrong BIN Number!")
             return
 
         bin_info = await get_bin_info(bin_number)
         if not bin_info:
-            bin_info = {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown"}
+            bin_info = {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
 
-        card_type = bin_info.get("vendor", "Unknown").capitalize()
-        card_brand = bin_info.get("type", "Unknown")
-        country = bin_info.get("country_name", "Unknown")
-        
-        exp_date = args[1] if len(args) > 1 else f"{random.randint(1,12):02d}/{random.randint(25,30)}"
-        cvv = args[2] if len(args) > 2 else f"{random.randint(100,999)}"
+        exp_date = f"{random.randint(1, 12):02d}|{random.randint(25, 30)}"
+        cvv = f"{random.randint(100, 999)}"
 
         cards = [
-            f"{generate_card(bin_number)} | {exp_date} | {cvv}"
+            f"`{generate_luhn_card(bin_number)} | {exp_date} | {cvv}`"
             for _ in range(10)
         ]
 
         message = (
-            "**Generated Cards 🚀**\n\n"
-            f"💳 **Card Type:** {card_type} ({card_brand})\n"
-            f"🌍 **Country:** {country}\n\n"
+            f"**Generated Cards 🚀**\n\n"
+            f"💳 **Card Type:** {bin_info.get('vendor', 'Unknown')} ({bin_info.get('type', 'Unknown')})\n"
+            f"🏦 **Bank:** {bin_info.get('bank', 'Unknown')}\n"
+            f"🌍 **Country:** {bin_info.get('country_name', 'Unknown')}\n\n"
             + "\n".join(cards) + 
-            "\n\n👉 @DarkDorking (Join Channel)"
+            "\n\n👉 Join our channel!"
         )
         
         await update.message.reply_text(message, parse_mode="Markdown")
-
     except Exception as e:
         await update.message.reply_text(f"⚠️ Error: {str(e)}")
 
