@@ -28,6 +28,7 @@ try:
     print("✅ Braintree API Initialized Successfully!")
 except Exception as e:
     print(f"⚠️ Error initializing Braintree: {str(e)}")
+    exit()
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_ID = 6972264549  # Admin ID for restricted commands
@@ -72,71 +73,28 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     bin_number = context.args[0]
-    generated_card = generate_luhn_card(bin_number)
+    cards = []
+    for _ in range(15):  # Generate 15 cards
+        card_number = generate_luhn_card(bin_number)
+        expiry_month = str(random.randint(1, 12)).zfill(2)
+        expiry_year = str(random.randint(25, 30))  # Future expiry year
+        cvv = str(random.randint(100, 999))
+        cards.append(f"{card_number}|{expiry_month}|{expiry_year}|{cvv}")
+
     bin_info = await get_bin_info(bin_number) or {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
-
-    message = (
-        f"🔥 **Generated Card** (`/gen`)\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"💳 **Card:** `{generated_card}`\n"
-        f"🏦 **Issuer:** {bin_info.get('bank', 'Unknown')}\n"
-        f"🌍 **Country:** {bin_info.get('country_name', 'Unknown')}\n"
-        f"🔖 **Type:** {bin_info.get('type', 'Unknown')}\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"Join @DarkDorking for more!"
-    )
-    await update.message.reply_text(message, parse_mode="Markdown")
-
-async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"Received /chk command from: {update.message.from_user.username} (ID: {update.message.from_user.id})")
     
-    args = context.args
-    if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}\|\d{2}\|\d{3}$", args[0]):
-        await update.message.reply_text("❌ Invalid format!\n**Example:** `/chk 4242424242424242|12|25|123`")
-        return
-
-    card_details = args[0].split('|')
-    bin_number = card_details[0][:6]
-    bin_info = await get_bin_info(bin_number) or {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
-
-    try:
-        result = gateway.transaction.sale({
-            "amount": "1.00",
-            "credit_card": {
-                "number": card_details[0],
-                "expiration_month": card_details[1],
-                "expiration_year": card_details[2],
-                "cvv": card_details[3],
-            },
-            "options": {"submit_for_settlement": False},
-        })
-
-        if result.is_success:
-            status = "✅ Approved"
-            response_message = "Transaction Successful."
-            gateway_name = "Braintree"
-        else:
-            status = "❌ Declined"
-            response_message = result.message
-            gateway_name = "Braintree Auth"
-
-    except Exception as e:
-        await update.message.reply_text(f"⚠️ Unexpected error: {str(e)}")
-        return
-
     message = (
-        f"🔥 **Braintree Auth** (`/chk`) | Free\n"
+        f"🔥 **Generated Cards** (`/gen`)
+"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"💳 **Card:** `{args[0]}`\n"
-        f"📌 **Status:** {status}\n"
-        f"📢 **Response:** {response_message}\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"💲 **Gateway:** {gateway_name}\n"
+        f"📌 **BIN:** {bin_number}\n"
         f"🏦 **Issuer:** {bin_info.get('bank', 'Unknown')}\n"
         f"🌍 **Country:** {bin_info.get('country_name', 'Unknown')}\n"
         f"🔖 **Type:** {bin_info.get('type', 'Unknown')}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"👤 **Checked by:** @{update.message.from_user.username}\n"
+        f"💳 **Cards (15x)**:\n"
+        f"```\n" + "\n".join(cards) + "\n```\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
         f"Join @DarkDorking for more!"
     )
     await update.message.reply_text(message, parse_mode="Markdown")
@@ -148,7 +106,6 @@ async def run_services():
     application = ApplicationBuilder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("gen", gen))
-    application.add_handler(CommandHandler("chk", chk))
     
     app = web.Application()
     app.router.add_get("/", health_check)
@@ -159,7 +116,7 @@ async def run_services():
 
     await application.initialize()
     await application.start()
-    await application.updater.start_polling()
+    await application.updater.start_polling(drop_pending_updates=True)
 
     while True:
         await asyncio.sleep(3600)
