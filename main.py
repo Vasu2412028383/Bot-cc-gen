@@ -9,13 +9,32 @@ from aiohttp import web
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")  # ✅ Telegram Bot Token 
 
-CARD_CHECK_API_URL = "https://your-api.com/check"  # ✅ API URL डालें
+CARD_CHECK_API_URL = "https://your-api.com/check"  # ✅ Card Checker API URL
+BIN_LOOKUP_API_URL = "https://bins.antipublic.cc/bins"  # ✅ BIN Lookup API URL
 SK_KEY = "sk_live_yourkeyhere"  # ✅ अपनी SK Key डालें
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.message.from_user.first_name  
     welcome_message = f"Welcome, {user_name}! 🚀\n\nThis is the Free CC Generator Bot.\n\nThis bot is created for @DarkDorking channel members. Enjoy!"
     await update.message.reply_text(welcome_message)
+
+async def get_bin_info(bin_number):
+    """✅ BIN की जानकारी प्राप्त करें"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(BIN_LOOKUP_API_URL + bin_number) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return {
+                        "brand": data.get("scheme", "Unknown").upper(),
+                        "type": data.get("type", "Unknown").upper(),
+                        "level": data.get("brand", "Unknown").upper(),
+                        "bank": data.get("bank", {}).get("name", "Unknown"),
+                        "country": data.get("country", {}).get("name", "Unknown"),
+                        "flag": data.get("country", {}).get("emoji", "🌍")
+                    }
+    except:
+        return None
 
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -32,15 +51,24 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         exp_date = args[1] if len(args) > 1 else f"{random.randint(1,12):02d}/{random.randint(25,30)}"
         cvv = args[2] if len(args) > 2 else f"{random.randint(100,999)}"
 
+        bin_info = await get_bin_info(bin_number[:6])  # ✅ BIN की जानकारी प्राप्त करें
+
         # 10 डमी कार्ड जनरेट करें
         cards = [
             f"{bin_number}{''.join(str(random.randint(0,9)) for _ in range(16 - len(bin_number)))} | {exp_date} | {cvv}"
             for _ in range(10)
         ]
 
+        bin_details = (
+            f"📝 **𝗜𝗻𝗳𝗼:** {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}\n"
+            f"🏦 **𝐈𝐬𝐬𝐮𝐞𝐫:** {bin_info['bank']}\n"
+            f"🌍 **𝗖𝗼𝘂𝗻𝘁𝗿𝘆:** {bin_info['country']} {bin_info['flag']}\n\n"
+        ) if bin_info else "⚠️ **BIN Info Not Available**\n\n"
+
         # फॉर्मेटेड मैसेज
         message = (
             "**Generated Cards 🚀**\n\n"
+            + bin_details
             + "\n".join([f"`{card}`" for card in cards]) +  # ✅ Mono Font में Card
             "\n\n👉 @DarkDorking (Join Channel)"
         )
@@ -63,6 +91,8 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Invalid Card Number!")
             return
 
+        bin_info = await get_bin_info(card_number[:6])  # ✅ BIN की जानकारी प्राप्त करें
+
         # ✅ API कॉल करें (SK Key के साथ)
         headers = {
             "Authorization": f"Bearer {SK_KEY}",
@@ -75,17 +105,17 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if response.status == 200:
                     result = await response.json()
                     status = result.get("status", "Unknown")
-                    card_type = result.get("type", "Unknown")  
-                    issuer = result.get("issuer", "Unknown")  
-                    country = result.get("country", "Unknown")  
-                    flag = result.get("flag", "🌍")  
+
+                    bin_details = (
+                        f"📝 **𝗜𝗻𝗳𝗼:** {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}\n"
+                        f"🏦 **𝐈𝐬𝐬𝐮𝐞𝐫:** {bin_info['bank']}\n"
+                        f"🌍 **𝗖𝗼𝘂𝗻𝘁𝗿𝘆:** {bin_info['country']} {bin_info['flag']}\n\n"
+                    ) if bin_info else "⚠️ **BIN Info Not Available**\n\n"
 
                     message = (
                         f"💳 **Card Status:** {status.upper()}\n\n"
-                        f"📝 **𝗜𝗻𝗳𝗼:** {card_type}\n"
-                        f"🏦 **𝐈𝐬𝐬𝐮𝐞𝐫:** {issuer}\n"
-                        f"🌍 **𝗖𝗼𝘂𝗻𝘁𝗿𝘆:** {country} {flag}\n\n"
-                        f"🔢 **Card:** `{card_number}`\n"
+                        + bin_details
+                        + f"🔢 **Card:** `{card_number}`\n"
                         f"📅 **Exp:** `{exp_date}`\n"
                         f"🔑 **CVV:** `{cvv}`"
                     )
