@@ -65,6 +65,23 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     await update.message.reply_text("✅ Broadcast Sent!")
 
+async def get_bin_info(bin_number):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{BIN_LOOKUP_URL}{bin_number}") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return {
+                        "brand": data.get("brand", "Unknown"),
+                        "type": data.get("type", "Unknown"),
+                        "level": data.get("level", "Unknown"),
+                        "bank": data.get("bank", "Unknown"),
+                        "country": data.get("country", "Unknown"),
+                        "flag": data.get("flag", "🌍")
+                    }
+    except:
+        return None
+
 async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if STRIPE_KEYS["global"] is None:
         await update.message.reply_text("❌ No Stripe key found! Admin needs to add it.")
@@ -107,13 +124,21 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     exp_date = args[1] if len(args) > 1 else f"{random.randint(1,12):02d}/{random.randint(25,30)}"
     cvv = args[2] if len(args) > 2 else f"{random.randint(100,999)}"
     
+    bin_info = await get_bin_info(bin_number[:6])
+    
     cards = [
         f"{bin_number}{''.join(str(random.randint(0,9)) for _ in range(16 - len(bin_number)))} | {exp_date} | {cvv}"
         for _ in range(10)
     ]
     
-    message = "\n".join([f"`{card}`" for card in cards])
-    await update.message.reply_text(f"**Generated Cards 🚀**\n\n{message}", parse_mode="Markdown")
+    bin_details = (
+        f"📝 **𝗜𝗻𝗳𝗼:** {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}\n"
+        f"🏦 **𝐈𝐬𝐬𝐮𝐞𝐫:** {bin_info['bank']}\n"
+        f"🌍 **𝗖𝗼𝘂𝗻𝘁𝗿𝘆:** {bin_info['country']} {bin_info['flag']}\n\n"
+    ) if bin_info else "⚠️ **BIN Info Not Available**\n\n"
+    
+    message = f"**Generated Cards 🚀**\n\n{bin_details}\n" + "\n".join([f"`{card}`" for card in cards])
+    await update.message.reply_text(message, parse_mode="Markdown")
 
 async def health_check(request):
     return web.Response(text="OK")
@@ -134,11 +159,11 @@ async def run_services():
     await runner.setup()
     site = web.TCPSite(runner, port=8080)
     await site.start()
-
+    
     await application.initialize()
     await application.start()
     await application.updater.start_polling()
-
+    
     while True:
         await asyncio.sleep(3600)
 
