@@ -9,18 +9,18 @@ from aiohttp import web
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('🚫 **Legal Notice:** यह बॉट सिर्फ डमी डेटा जनरेट करता है।')
+    await update.message.reply_text('Welcome To Free CC Genrator Bot 🚀 This Bot Is Created For @DarkDorking Channel Members')
 
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         args = context.args
         if not args:
-            await update.message.reply_text("❌ उदाहरण: `/gen 424242 [MM/YY] [CVV]`")
+            await update.message.reply_text("❌ EXAMPLE: `/gen 424242 [MM/YY] [CVV]`")
             return
 
         bin_number = args[0]
         if not re.match(r"^\d{6,16}$", bin_number):
-            await update.message.reply_text("❌ अवैध बिन नंबर!")
+            await update.message.reply_text("❌ Wrong B!n Number!")
             return
 
         exp_date = args[1] if len(args) > 1 else f"{random.randint(1,12):02d}/{random.randint(25,30)}"
@@ -42,7 +42,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(message, parse_mode="Markdown")
 
     except Exception as e:
-        await update.message.reply_text(f"⚠️ एरर: {str(e)}")
+        await update.message.reply_text(f"⚠️ Error: {str(e)}")
 
 async def health_check(request):
     return web.Response(text="OK")
