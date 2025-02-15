@@ -2,52 +2,61 @@ import os
 import random
 import re
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 TOKEN = os.getenv("8011551620:AAFvDlRL7brL1JF9kEpQJXIVzZf01og4Lc0")
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text('🚫 **Legal Notice:** यह बॉट सिर्फ डमी डेटा जनरेट करता है।')
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text('🚫 **Legal Notice:** यह बॉट सिर्फ डमी डेटा जनरेट करता है।')
 
-def generate(update: Update, context: CallbackContext):
-    try:
-        args = context.args
-        if not args:
-            update.message.reply_text("❌ उदाहरण: `/gen 424242 [MM/YY] [CVV]`")
-            return
+async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if len(args) < 1:
+        await update.message.reply_text("कृपया बिन नंबर डालें")
+        return
 
-        # बिन नंबर वैलिडेट करें
-        bin_number = args[0]
-        if not re.match(r"^\d{6,16}$", bin_number):
-            update.message.reply_text("❌ अवैध बिन नंबर!")
-            return
+    bin_number = args[0]
+    exp_date = None
+    cvv = None
 
-        # एक्सपायरी डेट और CVV (अगर दिया गया हो)
-        exp_date = args[1] if len(args) > 1 else f"{random.randint(1,12):02d}/{random.randint(25,30)}"
-        cvv = args[2] if len(args) > 2 else f"{random.randint(100,999)}"
+    if len(args) > 1:
+        exp_date = args[1]
+    if len(args) > 2:
+        cvv = args[2]
 
-        # 10 डमी कार्ड जनरेट करें
-        cards = []
-        for _ in range(10):
-            card = (
-                bin_number + 
-                ''.join(str(random.randint(0,9)) for _ in range(16 - len(bin_number))) + 
-                f" | {exp_date} | {cvv}"
-            )
-            cards.append(card)
+    if not re.match(r"^\d{6,16}$", bin_number):
+        await update.message.reply_text("बिन नंबर अवैध है")
+        return
 
-        update.message.reply_text("\n".join(cards))
+    if exp_date and not re.match(r"^\d{1,2}/\d{2}$", exp_date):
+        await update.message.reply_text("एक्सपायरी डेट अवैध है")
+        return
 
-    except Exception as e:
-        update.message.reply_text(f"⚠️ एरर: {str(e)}")
+    if cvv and not re.match(r"^\d{3}$", cvv):
+        await update.message.reply_text("CVV अवैध है")
+        return
+
+    cards = []
+    for _ in range(10):
+        card_number = generate_card_number(bin_number)
+        if exp_date:
+            card_number += f" - {exp_date}"
+        if cvv:
+            card_number += f" - {cvv}"
+        cards.append(card_number)
+
+    await update.message.reply_text("\n".join(cards))
+
+def generate_card_number(bin_number):
+    card_number = bin_number + ''.join(str(random.randint(0, 9)) for _ in range(16 - len(bin_number)))
+    return card_number
 
 def main():
-    updater = Updater(TOKEN)
-    dp = updater.dispatcher
+    application = ApplicationBuilder().token(TOKEN).build()
+    dp = application.dispatcher
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("gen", generate))
-    updater.start_polling()
-    updater.idle()
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
