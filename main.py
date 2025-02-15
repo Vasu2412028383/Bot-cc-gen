@@ -62,27 +62,20 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if STRIPE_KEY is None:
         await update.message.reply_text("❌ No Stripe API key found! Admin needs to add it using /addsk")
         return
-    
+
     args = context.args
     if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}\|\d{2}\|\d{3}$", args[0]):
         await update.message.reply_text("❌ EXAMPLE: /chk 4242424242424242|12|25|123")
         return
-    
+
     card_details = args[0].split('|')
     bin_number = card_details[0][:6]  # First 6 digits of card
-    
+
     stripe.api_key = STRIPE_KEY
     bin_info = await get_bin_info(bin_number)
-    
-    if not bin_info:
-        bin_info = {
-            "vendor": "Unknown",
-            "type": "Unknown",
-            "country_name": "Unknown",
-            "bank": "Unknown"
-        }
 
-    user_name = update.message.from_user.username or update.message.from_user.first_name
+    if not bin_info:
+        bin_info = {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
 
     try:
         token = stripe.Token.create(
@@ -94,27 +87,32 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
         )
         status = "✅ Approved"
-        response_msg = "Transaction Approved."
+        response_message = "Transaction Successful."
+        gateway = "Stripe"
     except stripe.error.CardError as e:
         status = "❌ Declined"
-        response_msg = e.user_message if hasattr(e, "user_message") else "Your card was declined."
+        response_message = e.user_message  # Capture the actual decline reason
+        if "Sending credit card numbers directly" in response_message:
+            response_message = "Your card was declined."
+        gateway = "Stripe Auth"
 
     message = (
-        f"🔥 **Stripe Auth (/chk) | Free**\n"
+        f"🔥 Stripe Auth (/chk) | Free\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"💳 **Card:** `{args[0]}`\n"
+        f"💳 **Card:** {args[0]}\n"
         f"📌 **Status:** {status}\n"
-        f"📢 **Response:** {response_msg}\n"
+        f"📢 **Response:** {response_message}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"💲 **Gateway:** Stripe Auth\n"
+        f"💲 **Gateway:** {gateway}\n"
         f"🏦 **Issuer:** {bin_info.get('bank', 'Unknown')}\n"
-        f"🌍 **Country:** {bin_info.get('country_name', 'Unknown')} \n"
-        f"🔖 **Type:** {bin_info.get('vendor', 'Unknown')} - {bin_info.get('type', 'Unknown')}\n"
+        f"🌍 **Country:** {bin_info.get('country_name', 'Unknown')}\n"
+        f"🔖 **Type:** {bin_info.get('type', 'Unknown')}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"👤 **Checked by:** @{user_name}"
+        f"👤 **Checked by:** @{update.message.from_user.username}"
     )
-    
+
     await update.message.reply_text(message, parse_mode="Markdown")
+
 
 
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
