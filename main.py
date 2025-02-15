@@ -64,8 +64,8 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     args = context.args
-    if len(args) < 1 or not re.match(r"^\d{16}\l\d{2}\l\d{2}\l\d{3}$", args[0]):
-        await update.message.reply_text("❌ EXAMPLE: /chk 4242424242424242l12l25l123")
+    if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}\|\d{2}\|\d{3}$", args[0]):
+        await update.message.reply_text("❌ EXAMPLE: /chk 4242424242424242|12|25|123")
         return
     
     card_details = args[0].split('|')
@@ -106,7 +106,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cvv = f"{random.randint(100, 999)}"
 
         cards = [
-            f"`{generate_luhn_card(bin_number)}l{exp_date}l{cvv}`"
+            f"`{generate_luhn_card(bin_number)}|{exp_date}|{cvv}`"
             for _ in range(10)
         ]
 
