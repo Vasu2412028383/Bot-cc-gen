@@ -64,8 +64,8 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     args = context.args
-    if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}\|\d{2}\|\d{3}$", args[0]):
-        await update.message.reply_text("❌ EXAMPLE: /chk 4242424242424242|12|25|123")
+    if len(args) < 1 or not re.match(r"^\d{16}\l\d{2}\l\d{2}\l\d{3}$", args[0]):
+        await update.message.reply_text("❌ EXAMPLE: /chk 4242424242424242l12l25l123")
         return
     
     card_details = args[0].split('|')
@@ -102,11 +102,11 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not bin_info:
             bin_info = {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
 
-        exp_date = f"{random.randint(1, 12):02d}|{random.randint(25, 30)}"
+        exp_date = f"{random.randint(1, 12):02d}l{random.randint(25, 30)}"
         cvv = f"{random.randint(100, 999)}"
 
         cards = [
-            f"`{generate_luhn_card(bin_number)} | {exp_date} | {cvv}`"
+            f"`{generate_luhn_card(bin_number)}l{exp_date}l{cvv}`"
             for _ in range(10)
         ]
 
@@ -116,7 +116,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🏦 **Bank:** {bin_info.get('bank', 'Unknown')}\n"
             f"🌍 **Country:** {bin_info.get('country_name', 'Unknown')}\n\n"
             + "\n".join(cards) + 
-            "\n\n👉 Join our channel!"
+            "\n\n👉 Join our channel! @DarkDorking"
         )
         
         await update.message.reply_text(message, parse_mode="Markdown")
