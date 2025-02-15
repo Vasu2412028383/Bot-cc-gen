@@ -10,52 +10,41 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text('🚫 **Legal Notice:** यह बॉट सिर्फ डमी डेटा जनरेट करता है।')
 
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    if len(args) < 1:
-        await update.message.reply_text("कृपया बिन नंबर डालें")
-        return
+    try:
+        args = context.args
+        if not args:
+            await update.message.reply_text("❌ उदाहरण: `/gen 424242 [MM/YY] [CVV]`")
+            return
 
-    bin_number = args[0]
-    exp_date = None
-    cvv = None
+        # बिन नंबर वैलिडेट करें
+        bin_number = args[0]
+        if not re.match(r"^\d{6,16}$", bin_number):
+            await update.message.reply_text("❌ अवैध बिन नंबर!")
+            return
 
-    if len(args) > 1:
-        exp_date = args[1]
-    if len(args) > 2:
-        cvv = args[2]
+        # एक्सपायरी डेट और CVV (अगर दिया गया हो)
+        exp_date = args[1] if len(args) > 1 else f"{random.randint(1,12):02d}/{random.randint(25,30)}"
+        cvv = args[2] if len(args) > 2 else f"{random.randint(100,999)}"
 
-    if not re.match(r"^\d{6,16}$", bin_number):
-        await update.message.reply_text("बिन नंबर अवैध है")
-        return
+        # 10 डमी कार्ड जनरेट करें
+        cards = []
+        for _ in range(10):
+            card = (
+                bin_number + 
+                ''.join(str(random.randint(0,9)) for _ in range(16 - len(bin_number))) + 
+                f" | {exp_date} | {cvv}"
+            )
+            cards.append(card)
 
-    if exp_date and not re.match(r"^\d{1,2}/\d{2}$", exp_date):
-        await update.message.reply_text("एक्सपायरी डेट अवैध है")
-        return
+        await update.message.reply_text("\n".join(cards))
 
-    if cvv and not re.match(r"^\d{3}$", cvv):
-        await update.message.reply_text("CVV अवैध है")
-        return
-
-    cards = []
-    for _ in range(10):
-        card_number = generate_card_number(bin_number)
-        if exp_date:
-            card_number += f" - {exp_date}"
-        if cvv:
-            card_number += f" - {cvv}"
-        cards.append(card_number)
-
-    await update.message.reply_text("\n".join(cards))
-
-def generate_card_number(bin_number):
-    card_number = bin_number + ''.join(str(random.randint(0, 9)) for _ in range(16 - len(bin_number)))
-    return card_number
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ एरर: {str(e)}")
 
 def main():
     application = ApplicationBuilder().token(TOKEN).build()
-    dp = application.dispatcher
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("gen", generate))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("gen", generate))
     application.run_polling()
 
 if __name__ == "__main__":
