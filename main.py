@@ -57,37 +57,26 @@ async def add_sk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     STRIPE_KEY = context.args[0]
     await update.message.reply_text("✅ Stripe API Key Set Successfully!")
 
-import stripe
-import re
-from telegram import Update
-from telegram.ext import ContextTypes
-
-STRIPE_KEY = None  # Ensure this is set using /addsk
-
 async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global STRIPE_KEY
+    print(f"Received /chk command from: {update.message.from_user.username} (ID: {update.message.from_user.id})")
+    
     if STRIPE_KEY is None:
         await update.message.reply_text("❌ No Stripe API key found! Admin needs to add it using /addsk")
         return
 
-    # Validate user input
     args = context.args
-    card_pattern = r"^\d{16}\|\d{2}\|\d{2}\|\d{3}$"
-    if len(args) < 1 or not re.match(card_pattern, args[0]):
+    if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}\|\d{2}\|\d{3}$", args[0]):
         await update.message.reply_text("❌ Invalid format!\n**Example:** `/chk 4242424242424242|12|25|123`")
         return
 
     card_details = args[0].split('|')
-    bin_number = card_details[0][:6]  # First 6 digits of card
+    bin_number = card_details[0][:6]
 
     stripe.api_key = STRIPE_KEY
-    bin_info = await get_bin_info(bin_number)
-
-    if not bin_info:
-        bin_info = {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
+    bin_info = await get_bin_info(bin_number) or {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
 
     try:
-        # Stripe Token Creation
         token = stripe.Token.create(
             card={
                 "number": card_details[0],
@@ -99,23 +88,17 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status = "✅ Approved"
         response_message = "Transaction Successful."
         gateway = "Stripe"
-
     except stripe.error.CardError as e:
         status = "❌ Declined"
-        response_message = e.user_message or "Card declined."
-        if "Sending credit card numbers directly" in response_message:
-            response_message = "Your card was declined."
+        response_message = e.user_message or "Your card was declined."
         gateway = "Stripe Auth"
-
     except stripe.error.APIConnectionError:
         await update.message.reply_text("⚠️ Stripe API connection failed. Please try again later.")
         return
-
     except Exception as e:
         await update.message.reply_text(f"⚠️ Unexpected error: {str(e)}")
         return
 
-    # Final Message Formatting
     message = (
         f"🔥 **Stripe Auth** (`/chk`) | Free\n"
         f"━━━━━━━━━━━━━━━━━━\n"
@@ -130,48 +113,7 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"━━━━━━━━━━━━━━━━━━\n"
         f"👤 **Checked by:** @{update.message.from_user.username}"
     )
-
     await update.message.reply_text(message, parse_mode="Markdown")
-
-
-
-
-async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        args = context.args
-        if not args:
-            await update.message.reply_text("❌ EXAMPLE: /gen 424242")
-            return
-
-        bin_number = args[0]
-        if not re.match(r"^\d{4,16}$", bin_number):
-            await update.message.reply_text("❌ Wrong BIN Number!")
-            return
-
-        bin_info = await get_bin_info(bin_number)
-        if not bin_info:
-            bin_info = {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
-
-        exp_date = f"{random.randint(1, 12):02d}|{random.randint(25, 30)}"
-        cvv = f"{random.randint(100, 999)}"
-
-        cards = [
-            f"`{generate_luhn_card(bin_number)}|{exp_date}|{cvv}`"
-            for _ in range(10)
-        ]
-
-        message = (
-            f"**Generated Cards 🚀**\n\n"
-            f"💳 **Card Type:** {bin_info.get('vendor', 'Unknown')} ({bin_info.get('type', 'Unknown')})\n"
-            f"🏦 **Bank:** {bin_info.get('bank', 'Unknown')}\n"
-            f"🌍 **Country:** {bin_info.get('country_name', 'Unknown')}\n\n"
-            + "\n".join(cards) + 
-            "\n\n👉 Join our channel! @DarkDorking"
-        )
-        
-        await update.message.reply_text(message, parse_mode="Markdown")
-    except Exception as e:
-        await update.message.reply_text(f"⚠️ Error: {str(e)}")
 
 async def health_check(request):
     return web.Response(text="OK")
@@ -181,7 +123,6 @@ async def run_services():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("addsk", add_sk))
     application.add_handler(CommandHandler("chk", check_card))
-    application.add_handler(CommandHandler("gen", generate))
     
     app = web.Application()
     app.router.add_get("/", health_check)
