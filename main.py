@@ -7,11 +7,9 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from aiohttp import web
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")  # ✅ Telegram Bot Token 
+TOKEN = os.getenv("TELEGRAM_TOKEN")  # ✅ Telegram Bot Token
 
-CARD_CHECK_API_URL = "https://your-api.com/check"  # ✅ Card Checker API URL
-BIN_LOOKUP_API_URL = "https://bins.antipublic.cc/bins"  # ✅ BIN Lookup API URL
-SK_KEY = "sk_live_yourkeyhere"  # ✅ अपनी SK Key डालें
+BIN_LOOKUP_URL = "https://bins.antipublic.cc/bins/"  # ✅ Free BIN Lookup URL
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.message.from_user.first_name  
@@ -19,19 +17,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_message)
 
 async def get_bin_info(bin_number):
-    """✅ BIN की जानकारी प्राप्त करें"""
+    """✅ Free BIN Lookup से जानकारी प्राप्त करें (No API Key Required)"""
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(BIN_LOOKUP_API_URL + bin_number) as response:
+            async with session.get(f"{BIN_LOOKUP_URL}{bin_number}") as response:
                 if response.status == 200:
                     data = await response.json()
                     return {
-                        "brand": data.get("scheme", "Unknown").upper(),
-                        "type": data.get("type", "Unknown").upper(),
-                        "level": data.get("brand", "Unknown").upper(),
-                        "bank": data.get("bank", {}).get("name", "Unknown"),
-                        "country": data.get("country", {}).get("name", "Unknown"),
-                        "flag": data.get("country", {}).get("emoji", "🌍")
+                        "brand": data.get("brand", "Unknown"),
+                        "type": data.get("type", "Unknown"),
+                        "level": data.get("level", "Unknown"),
+                        "bank": data.get("bank", "Unknown"),
+                        "country": data.get("country", "Unknown"),
+                        "flag": data.get("flag", "🌍")
                     }
     except:
         return None
@@ -78,56 +76,6 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"⚠️ Error: {str(e)}")
 
-async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """SK Key से Card को Live या Dead चेक करें"""
-    try:
-        args = context.args
-        if len(args) < 3:
-            await update.message.reply_text("❌ EXAMPLE: `/checkcard 4242424242424242 12/26 123`")
-            return
-
-        card_number, exp_date, cvv = args[0], args[1], args[2]
-        if not re.match(r"^\d{16}$", card_number):
-            await update.message.reply_text("❌ Invalid Card Number!")
-            return
-
-        bin_info = await get_bin_info(card_number[:6])  # ✅ BIN की जानकारी प्राप्त करें
-
-        # ✅ API कॉल करें (SK Key के साथ)
-        headers = {
-            "Authorization": f"Bearer {SK_KEY}",
-            "Content-Type": "application/json"
-        }
-        data = {"card": card_number, "exp": exp_date, "cvv": cvv}  
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(CARD_CHECK_API_URL, headers=headers, json=data) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    status = result.get("status", "Unknown")
-
-                    bin_details = (
-                        f"📝 **𝗜𝗻𝗳𝗼:** {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}\n"
-                        f"🏦 **𝐈𝐬𝐬𝐮𝐞𝐫:** {bin_info['bank']}\n"
-                        f"🌍 **𝗖𝗼𝘂𝗻𝘁𝗿𝘆:** {bin_info['country']} {bin_info['flag']}\n\n"
-                    ) if bin_info else "⚠️ **BIN Info Not Available**\n\n"
-
-                    message = (
-                        f"💳 **Card Status:** {status.upper()}\n\n"
-                        + bin_details
-                        + f"🔢 **Card:** `{card_number}`\n"
-                        f"📅 **Exp:** `{exp_date}`\n"
-                        f"🔑 **CVV:** `{cvv}`"
-                    )
-
-                    await update.message.reply_text(message, parse_mode="Markdown")
-                    return
-
-        await update.message.reply_text("⚠️ Error: Unable to check card.")
-
-    except Exception as e:
-        await update.message.reply_text(f"⚠️ Error: {str(e)}")
-
 async def health_check(request):
     return web.Response(text="OK")
 
@@ -136,7 +84,6 @@ async def run_services():
     application = ApplicationBuilder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("gen", generate))
-    application.add_handler(CommandHandler("checkcard", check_card))  # ✅ नया चेकिंग फीचर ऐड किया गया
 
     # HTTP सर्वर (Port 8080)
     app = web.Application()
