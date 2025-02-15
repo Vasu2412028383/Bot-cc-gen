@@ -69,8 +69,14 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     card_details = args[0].split('|')
-    stripe.api_key = STRIPE_KEY
+    bin_number = card_details[0][:6]  # First 6 digits of card
     
+    stripe.api_key = STRIPE_KEY
+    bin_info = await get_bin_info(bin_number)
+    
+    if not bin_info:
+        bin_info = {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
+
     try:
         token = stripe.Token.create(
             card={
@@ -80,9 +86,19 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "cvc": card_details[3]
             }
         )
-        message = f"✅ LIVE: {args[0]}"
+        status = "✅ LIVE"
+        gateway = "Stripe"
     except stripe.error.CardError:
-        message = f"❌ DEAD: {args[0]}"
+        status = "❌ DEAD"
+        gateway = "None"
+
+    message = (
+        f"{status}: `{args[0]}`\n\n"
+        f"💳 **Card Type:** {bin_info.get('vendor', 'Unknown')} ({bin_info.get('type', 'Unknown')})\n"
+        f"🏦 **Bank:** {bin_info.get('bank', 'Unknown')}\n"
+        f"🌍 **Country:** {bin_info.get('country_name', 'Unknown')}\n"
+        f"🔗 **Gateway:** {gateway}\n"
+    )
     
     await update.message.reply_text(message, parse_mode="Markdown")
 
@@ -102,7 +118,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not bin_info:
             bin_info = {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
 
-        exp_date = f"{random.randint(1, 12):02d}l{random.randint(25, 30)}"
+        exp_date = f"{random.randint(1, 12):02d}|{random.randint(25, 30)}"
         cvv = f"{random.randint(100, 999)}"
 
         cards = [
