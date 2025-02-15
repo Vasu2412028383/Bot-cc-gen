@@ -19,7 +19,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         bin_number = args[0]
-        if not re.match(r"^\d{6,16}$", bin_number):
+        if not re.match(r"^\d{4,16}$", bin_number):
             await update.message.reply_text("❌ Wrong B!n Number!")
             return
 
