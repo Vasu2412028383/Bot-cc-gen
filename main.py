@@ -9,7 +9,9 @@ from aiohttp import web
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('Welcome To Free CC Genrator Bot 🚀 This Bot Is Created For @DarkDorking Channel Members')
+    user_name = update.message.from_user.first_name  # यूजर का नाम प्राप्त करें
+    welcome_message = f"Welcome, {user_name}! 🚀\n\nThis is the Free CC Generator Bot.\n\nThis bot is created for @DarkDorking channel members. Enjoy!"
+    await update.message.reply_text(welcome_message)
 
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -26,13 +28,11 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         exp_date = args[1] if len(args) > 1 else f"{random.randint(1,12):02d}/{random.randint(25,30)}"
         cvv = args[2] if len(args) > 2 else f"{random.randint(100,999)}"
 
-        # 10 डमी कार्ड जनरेट करें
         cards = [
             f"{bin_number}{''.join(str(random.randint(0,9)) for _ in range(16 - len(bin_number)))} | {exp_date} | {cvv}"
             for _ in range(10)
         ]
 
-        # फॉर्मेटेड मैसेज
         message = (
             "**Generated Cards 🚀**\n\n"
             + "\n".join(cards) + 
@@ -48,12 +48,10 @@ async def health_check(request):
     return web.Response(text="OK")
 
 async def run_services():
-    # Telegram बॉट सेटअप
     application = ApplicationBuilder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("gen", generate))
     
-    # HTTP सर्वर (Port 8080)
     app = web.Application()
     app.router.add_get("/", health_check)
     runner = web.AppRunner(app)
@@ -61,12 +59,10 @@ async def run_services():
     site = web.TCPSite(runner, port=8080)
     await site.start()
 
-    # दोनों सर्वर चलाएं
     await application.initialize()
     await application.start()
     await application.updater.start_polling()
 
-    # अनंत लूप
     while True:
         await asyncio.sleep(3600)
 
