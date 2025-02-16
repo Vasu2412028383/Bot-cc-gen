@@ -11,7 +11,7 @@ from aiohttp import web
 # ✅ Braintree API Keys (Directly Embedded)
 BRAINTREE_CREDENTIALS = {
     "merchant_id": "xtw6fsgw6387brsz",
-    "public_key": "xtw6fsgw6387brsz",
+    "public_key": "g3q4dw5ykhjtgcqy",
     "private_key": "0276dac6121e9cf5f914b018493902ca",
 }
 
