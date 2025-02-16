@@ -19,7 +19,7 @@ BRAINTREE_CREDENTIALS = {
 try:
     gateway = braintree.BraintreeGateway(
         braintree.Configuration(
-            braintree.Environment.Sandbox,  # Change to Production if needed
+            braintree.Environment.Production,  # Change to Production if needed
             merchant_id=BRAINTREE_CREDENTIALS["merchant_id"],
             public_key=BRAINTREE_CREDENTIALS["public_key"],
             private_key=BRAINTREE_CREDENTIALS["private_key"],
