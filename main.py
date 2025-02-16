@@ -84,8 +84,7 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bin_info = await get_bin_info(bin_number) or {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
     
     message = (
-        f"🔥 **Generated Cards** (`/gen`)
-"
+        f"🔥 **Generated Cards** (`/gen`)"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"📌 **BIN:** {bin_number}\n"
         f"🏦 **Issuer:** {bin_info.get('bank', 'Unknown')}\n"
