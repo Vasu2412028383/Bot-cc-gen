@@ -46,7 +46,6 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message = (
         f"🔥 **Generated Cards** (`/gen`)"
-━━━━━━━━━━━━━━━━━━\n"
         f"📌 **BIN:** {bin_number}\n"
         f"🏦 **Issuer:** {bin_info.get('bank', 'Unknown')}\n"
         f"🌍 **Country:** {bin_info.get('country_name', 'Unknown')}\n"
