@@ -45,8 +45,8 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bin_info = await get_bin_info(bin_number) or {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
     
     message = (
-        f"🔥 **Generated Cards** (`/gen`)"
-        f"━━━━━━━━━━━━━━━━━━\n"
+        f"🔥 **Generated Cards** (`/gen`)
+━━━━━━━━━━━━━━━━━━\n"
         f"📌 **BIN:** {bin_number}\n"
         f"🏦 **Issuer:** {bin_info.get('bank', 'Unknown')}\n"
         f"🌍 **Country:** {bin_info.get('country_name', 'Unknown')}\n"
@@ -59,51 +59,77 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(message, parse_mode="Markdown")
 
-# ✅ SK Key Commands
-async def addsk(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ✅ Card Check Command
+async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global STRIPE_KEY
-    if update.message.from_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ You are not authorized to set the Stripe API key!")
+    if STRIPE_KEY is None:
+        await update.message.reply_text("❌ No Stripe API key found! Admin needs to add it using /addsk")
         return
-    if not context.args:
-        await update.message.reply_text("❌ EXAMPLE: /addsk sk_live_xxx")
-        return
-    STRIPE_KEY = context.args[0]
-    await update.message.reply_text("✅ Stripe API Key Set Successfully!")
 
-async def viewsk(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global STRIPE_KEY
-    if update.message.from_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ You are not authorized to view the Stripe API key!")
+    args = context.args
+    if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}\|\d{4}\|\d{3}$", args[0]):
+        await update.message.reply_text("❌ Invalid format!\nExample: `/chk 4242424242424242|12|2025|123`")
         return
-    await update.message.reply_text(f"🔑 Current Stripe API Key: `{STRIPE_KEY}`", parse_mode="Markdown")
 
-# ✅ VIP User Management
-async def addvip(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ You are not authorized to modify VIP users!")
-        return
-    if not context.args:
-        await update.message.reply_text("❌ EXAMPLE: /addvip 123456789")
-        return
-    user_id = int(context.args[0])
-    VIP_USERS.add(user_id)
-    await update.message.reply_text(f"✅ User {user_id} added to VIP users!")
+    card_details = args[0].split('|')
+    stripe.api_key = STRIPE_KEY
 
-async def removevip(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ You are not authorized to modify VIP users!")
-        return
-    if not context.args:
-        await update.message.reply_text("❌ EXAMPLE: /removevip 123456789")
-        return
-    user_id = int(context.args[0])
-    VIP_USERS.discard(user_id)
-    await update.message.reply_text(f"✅ User {user_id} removed from VIP users!")
+    try:
+        token = stripe.Token.create(
+            card={
+                "number": card_details[0],
+                "exp_month": int(card_details[1]),
+                "exp_year": int(card_details[2]),
+                "cvc": card_details[3],
+            }
+        )
+        status = "✅ Live Card"
+        response_message = "Card is active and approved."
+    except stripe.error.CardError as e:
+        status = "❌ Dead Card"
+        response_message = e.user_message or "Your card was declined."
+    except Exception as e:
+        status = "⚠️ Error"
+        response_message = f"Unexpected error: {str(e)}"
+        print(f"❌ ERROR LOG: {str(e)}")
 
-# ✅ Health Check Endpoint
-async def health_check(request):
-    return web.Response(text="OK")
+    await update.message.reply_text(f"💳 Card: `{args[0]}`\n📌 Status: {status}\n📢 Response: {response_message}", parse_mode="Markdown")
+
+# ✅ Mass Check Command (VIP Only)
+async def mass(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.from_user.id not in VIP_USERS:
+        await update.message.reply_text("❌ This command is only for VIP users!")
+        return
+
+    cards = context.args
+    if len(cards) > 10:
+        await update.message.reply_text("❌ You can only check up to 10 cards at once!")
+        return
+
+    results = []
+    for card in cards:
+        args = card.split('|')
+        if len(args) != 4:
+            results.append(f"{card} ❌ Invalid Format")
+            continue
+
+        stripe.api_key = STRIPE_KEY
+        try:
+            token = stripe.Token.create(
+                card={
+                    "number": args[0],
+                    "exp_month": int(args[1]),
+                    "exp_year": int(args[2]),
+                    "cvc": args[3],
+                }
+            )
+            results.append(f"{card} ✅ Live Card")
+        except stripe.error.CardError:
+            results.append(f"{card} ❌ Dead Card")
+        except Exception as e:
+            results.append(f"{card} ⚠️ Error: {str(e)}")
+
+    await update.message.reply_text("\n".join(results))
 
 # ✅ Bot Initialization
 async def run_services():
@@ -111,6 +137,8 @@ async def run_services():
     application.add_handler(CommandHandler("addsk", addsk))
     application.add_handler(CommandHandler("viewsk", viewsk))
     application.add_handler(CommandHandler("gen", gen))
+    application.add_handler(CommandHandler("chk", chk))
+    application.add_handler(CommandHandler("mass", mass))
     application.add_handler(CommandHandler("addvip", addvip))
     application.add_handler(CommandHandler("removevip", removevip))
     
