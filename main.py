@@ -3,33 +3,13 @@ import random
 import re
 import asyncio
 import aiohttp
-import braintree
+import stripe
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from aiohttp import web
 
-# ✅ Braintree API Keys (Directly Embedded)
-BRAINTREE_CREDENTIALS = {
-    "merchant_id": "xtw6fsgw6387brsz",
-    "public_key": "g3q4dw5ykhjtgcqy",
-    "private_key": "0276dac6121e9cf5f914b018493902ca",
-}
-
-# ✅ Initialize Braintree Gateway
-try:
-    gateway = braintree.BraintreeGateway(
-        braintree.Configuration(
-            braintree.Environment.Production,  # Change to Production if needed
-            merchant_id=BRAINTREE_CREDENTIALS["merchant_id"],
-            public_key=BRAINTREE_CREDENTIALS["public_key"],
-            private_key=BRAINTREE_CREDENTIALS["private_key"],
-        )
-    )
-    print("✅ Braintree API Initialized Successfully!")
-except Exception as e:
-    print(f"⚠️ Error initializing Braintree: {str(e)}")
-    exit()
-
+# ✅ Stripe API Key (Initially None, set via /addsk command)
+STRIPE_KEY = None
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 ADMIN_ID = 6972264549  # Admin ID for restricted commands
 
@@ -43,6 +23,17 @@ async def get_bin_info(bin_number):
     except Exception as e:
         print(f"BIN API Error: {e}")
     return None
+
+async def addsk(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global STRIPE_KEY
+    if update.message.from_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ You are not authorized to set the Stripe API key!")
+        return
+    if not context.args:
+        await update.message.reply_text("❌ EXAMPLE: /addsk sk_live_xxx")
+        return
+    STRIPE_KEY = context.args[0]
+    await update.message.reply_text("✅ Stripe API Key Set Successfully!")
 
 def luhn_check(card_number):
     digits = [int(d) for d in str(card_number)]
@@ -62,11 +53,6 @@ def generate_luhn_card(bin_number):
         if luhn_check(card_number):
             return card_number
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_name = update.message.from_user.first_name
-    welcome_message = f"Welcome, {user_name}! 🚀\n\nThis is the Free CC Generator Bot.\n\nJoin @DarkDorking for updates!"
-    await update.message.reply_text(welcome_message)
-
 async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 1 or not re.match(r"^\d{6}$", context.args[0]):
         await update.message.reply_text("❌ Invalid BIN format!\nExample: `/gen 424242`")
@@ -84,7 +70,8 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bin_info = await get_bin_info(bin_number) or {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
     
     message = (
-        f"🔥 **Generated Cards** (`/gen`)"
+        f"🔥 **Generated Cards** (`/gen`)
+"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"📌 **BIN:** {bin_number}\n"
         f"🏦 **Issuer:** {bin_info.get('bank', 'Unknown')}\n"
@@ -98,44 +85,52 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(message, parse_mode="Markdown")
 
-async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}\|\d{4}\|\d{3}$", args[0]):
-        await update.message.reply_text("❌ Invalid format!\nExample: `/chk 4242424242424242|12|2025|123`")
+async def mass(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global STRIPE_KEY
+    if STRIPE_KEY is None:
+        await update.message.reply_text("❌ No Stripe API key found! Admin needs to add it using /addsk")
         return
 
-    card_details = args[0].split('|')
-    try:
-        result = gateway.transaction.sale({
-            "amount": "1.00",
-            "credit_card": {
-                "number": card_details[0],
-                "expiration_month": card_details[1],
-                "expiration_year": card_details[2],
-                "cvv": card_details[3],
-            },
-            "options": {"submit_for_settlement": False},
-        })
+    cards = context.args
+    if len(cards) != 15:
+        await update.message.reply_text("❌ Please provide exactly 15 cards in the format: `card|mm|yyyy|cvv`")
+        return
 
-        if result.is_success:
-            status = "✅ Approved"
-            response_message = "Transaction Successful."
-        else:
-            status = "❌ Declined"
-            response_message = result.message
+    stripe.api_key = STRIPE_KEY
+    results = []
 
-        await update.message.reply_text(f"💳 Card: `{args[0]}`\n📌 Status: {status}\n📢 Response: {response_message}", parse_mode="Markdown")
-    except Exception as e:
-        await update.message.reply_text(f"⚠️ Unexpected error: {str(e)}")
+    for card in cards:
+        if not re.match(r"^\d{16}\|\d{2}\|\d{4}\|\d{3}$", card):
+            results.append(f"❌ Invalid Format: {card}")
+            continue
+
+        card_details = card.split('|')
+        try:
+            token = stripe.Token.create(
+                card={
+                    "number": card_details[0],
+                    "exp_month": int(card_details[1]),
+                    "exp_year": int(card_details[2]),
+                    "cvc": card_details[3],
+                }
+            )
+            results.append(f"✅ Live: {card}")
+        except stripe.error.CardError as e:
+            results.append(f"❌ Dead: {card} - {e.user_message}")
+        except Exception as e:
+            results.append(f"⚠️ Error: {card} - {str(e)}")
+
+    await update.message.reply_text("\n".join(results))
 
 async def health_check(request):
     return web.Response(text="OK")
 
 async def run_services():
     application = ApplicationBuilder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("gen", gen))
+    application.add_handler(CommandHandler("addsk", addsk))
     application.add_handler(CommandHandler("chk", chk))
+    application.add_handler(CommandHandler("gen", gen))
+    application.add_handler(CommandHandler("mass", mass))
     
     app = web.Application()
     app.router.add_get("/", health_check)
