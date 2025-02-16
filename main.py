@@ -1,8 +1,6 @@
 import os
 import random
-import re
 import asyncio
-import aiohttp
 import braintree
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
@@ -16,14 +14,14 @@ BRAINTREE_PRIVATE_KEY = os.getenv("7785bf641215326684b40588d0dd8b22")
 # Braintree Configuration
 braintree_gateway = braintree.BraintreeGateway(
     braintree.Configuration(
-        braintree.Environment.Sandbox,  # Live के लिए 'Production' सेट करो
+        braintree.Environment.Sandbox,  # Live के लिए 'Production' सेट करें
         merchant_id=BRAINTREE_MERCHANT_ID,
         public_key=BRAINTREE_PUBLIC_KEY,
         private_key=BRAINTREE_PRIVATE_KEY
     )
 )
 
-# ✅ Braintree Test BINs
+# ✅ Braintree Compatible Test BINs
 BRAINTREE_BINS = ["411111", "400551", "555555", "222300", "378282"]
 
 def generate_braintree_card():
@@ -80,7 +78,7 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
             response_message = "Card Verified via Braintree."
         else:
             status = "❌ Declined"
-            response_message = result.transaction.processor_response_text if result.transaction else result.message
+            response_message = result.transaction.processor_response_text if result.transaction else "Transaction Declined"
 
     except Exception as e:
         status = "⚠️ Error"
@@ -89,7 +87,7 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = (
         f"💳 **Card:** {args[0]}\n"
         f"📌 **Status:** {status}\n"
-        f"📢 **Response:** {response_message}\n"
+        f"📢 **Response:** {response_message or 'No response from Braintree'}\n"
     )
 
     await update.message.reply_text(message, parse_mode="Markdown")
