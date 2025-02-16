@@ -128,8 +128,29 @@ async def check_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(message, parse_mode="Markdown")
 
-application = ApplicationBuilder().token(TOKEN).build()
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("gen", generate))
-application.add_handler(CommandHandler("chk", check_card))
-application.add_handler(CommandHandler("bin", get_bin))
+async def health_check(request):
+    return web.Response(text="OK")
+
+async def run_services():
+    application = ApplicationBuilder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("gen", generate))
+    application.add_handler(CommandHandler("chk", check_card))
+    application.add_handler(CommandHandler("bin", get_bin))
+    
+    app = web.Application()
+    app.router.add_get("/health", health_check)  # Health check route fixed
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, host="0.0.0.0", port=8080)  # Ensuring it's accessible
+    await site.start()
+    
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+
+    while True:
+        await asyncio.sleep(3600)
+
+if __name__ == "__main__":
+    asyncio.run(run_services())
