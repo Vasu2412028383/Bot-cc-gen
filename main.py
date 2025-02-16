@@ -77,14 +77,15 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for _ in range(15):  # Generate 15 cards
         card_number = generate_luhn_card(bin_number)
         expiry_month = str(random.randint(1, 12)).zfill(2)
-        expiry_year = str(random.randint(25, 30))  # Future expiry year
+        expiry_year = str(random.randint(2025, 2030))  # Full year format
         cvv = str(random.randint(100, 999))
         cards.append(f"{card_number}|{expiry_month}|{expiry_year}|{cvv}")
 
     bin_info = await get_bin_info(bin_number) or {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
     
     message = (
-        f"🔥 **Generated Cards** (`/gen`)"
+        f"🔥 **Generated Cards** (`/gen`)
+"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"📌 **BIN:** {bin_number}\n"
         f"🏦 **Issuer:** {bin_info.get('bank', 'Unknown')}\n"
@@ -100,8 +101,8 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
-    if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}\|\d{2}\|\d{3}$", args[0]):
-        await update.message.reply_text("❌ Invalid format!\nExample: `/chk 4242424242424242|12|25|123`")
+    if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}\|\d{4}\|\d{3}$", args[0]):
+        await update.message.reply_text("❌ Invalid format!\nExample: `/chk 4242424242424242|12|2025|123`")
         return
 
     card_details = args[0].split('|')
