@@ -84,7 +84,8 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bin_info = await get_bin_info(bin_number) or {"vendor": "Unknown", "type": "Unknown", "country_name": "Unknown", "bank": "Unknown"}
     
     message = (
-        f"🔥 **Generated Cards** (`/gen`)"
+        f"🔥 **Generated Cards** (`/gen`)
+"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"📌 **BIN:** {bin_number}\n"
         f"🏦 **Issuer:** {bin_info.get('bank', 'Unknown')}\n"
@@ -98,6 +99,36 @@ async def gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(message, parse_mode="Markdown")
 
+async def chk(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if len(args) < 1 or not re.match(r"^\d{16}\|\d{2}\|\d{2}\|\d{3}$", args[0]):
+        await update.message.reply_text("❌ Invalid format!\nExample: `/chk 4242424242424242|12|25|123`")
+        return
+
+    card_details = args[0].split('|')
+    try:
+        result = gateway.transaction.sale({
+            "amount": "1.00",
+            "credit_card": {
+                "number": card_details[0],
+                "expiration_month": card_details[1],
+                "expiration_year": card_details[2],
+                "cvv": card_details[3],
+            },
+            "options": {"submit_for_settlement": False},
+        })
+
+        if result.is_success:
+            status = "✅ Approved"
+            response_message = "Transaction Successful."
+        else:
+            status = "❌ Declined"
+            response_message = result.message
+
+        await update.message.reply_text(f"💳 Card: `{args[0]}`\n📌 Status: {status}\n📢 Response: {response_message}", parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Unexpected error: {str(e)}")
+
 async def health_check(request):
     return web.Response(text="OK")
 
@@ -105,6 +136,7 @@ async def run_services():
     application = ApplicationBuilder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("gen", gen))
+    application.add_handler(CommandHandler("chk", chk))
     
     app = web.Application()
     app.router.add_get("/", health_check)
