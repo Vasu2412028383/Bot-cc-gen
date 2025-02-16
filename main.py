@@ -9,9 +9,9 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from aiohttp import web
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-BRAINTREE_MERCHANT_ID = os.getenv("BRAINTREE_MERCHANT_ID")
-BRAINTREE_PUBLIC_KEY = os.getenv("BRAINTREE_PUBLIC_KEY")
-BRAINTREE_PRIVATE_KEY = os.getenv("BRAINTREE_PRIVATE_KEY")
+BRAINTREE_MERCHANT_ID = os.getenv("xtw6fsgw6387brsz")
+BRAINTREE_PUBLIC_KEY = os.getenv("8dfyd6d5czsx2qcj")
+BRAINTREE_PRIVATE_KEY = os.getenv("7785bf641215326684b40588d0dd8b22")
 
 # Braintree Configuration
 braintree_gateway = braintree.BraintreeGateway(
